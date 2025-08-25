@@ -41,14 +41,19 @@ class Server:
         print("Pronto el server para recibir ravioles!")
 
         while True:
-            self.connectionSocket, self.err = self.master.accept()
+            self.connectionSocket, addr = self.master.accept()
 
-            while self.err!="closed":
-                request, self.err = self.connectionSocket.recv(1024).decode()
-
-            sentence = self.connectionSocket.recv(1024).decode()
+            
+        
+            sentence = self.connectionSocket.recv(4096).decode()
             capitalizedSentence = sentence.upper()
-            self.connectionSocket.send(capitalizedSentence.encode())
+            
+            total_sent = 0
+            while total_sent < len(capitalizedSentence):
+              sent = self.connectionSocket.send(capitalizedSentence.encode()[total_sent:])
+              total_sent += sent
+            print(capitalizedSentence)
+             
             self.connectionSocket.close()
             print("Ravioles servidos!")
 
