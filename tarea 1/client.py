@@ -14,13 +14,19 @@ import xml.etree.ElementTree as ET
     #clientSocket.close()
 
 class Client:
+
+    #acorde al curso--------------------
     def __init__(self):
-        self.connection = None
+        self.master = socket() #antes estaba inicializado en None
+        self.master.bind(("*", 0))
+        self.client = None
+        self.err = None
 
     def connect(self, address, port):
-        import socket
-        self.connection = socket(AF_INET, SOCK_STREAM)
-        self.connection.connect((address, port))
+        self.master = socket(AF_INET, SOCK_STREAM)
+        self.client, self.err = self.master.connect((address, port))
+    #-----------------------------------
+
 
     def __getattr__(self, name): #checkear si es lo mas conveniente, si no pudeo directamente implementar todo en el getattr o su alternativa
         def method(*args):
@@ -46,13 +52,16 @@ class Client:
         request_xml = ET.tostring(request, encoding='utf-8', xml_declaration=True)
         
 
-        #NO USAR SENDALL !!!!!!!!!!!!!!!!!!!!!!!!!!
-        self.connection.sendall(request_xml) #el encode() no va ahi adentro?
-        #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        #acorde al curso--------------------
+        remain = request_xml
+
+        while remain!="":
+            remain, self.err = client.send(request_xml)
+        #-----------------------------------        
 
 
         # Receive response
-        response = self.connection.recv(4096) #deberia dar con 1024 creo
+        response = self.master.recv(4096) #deberia dar con 1024 creo
         return self.parse_response(response)
 
     def parse_response(self, response):
