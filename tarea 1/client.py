@@ -17,13 +17,14 @@ class Client:
 
     #acorde al curso--------------------
     def __init__(self):
-        self.master = socket() #antes estaba inicializado en None
-        self.master.bind(("*", 0))
+        self.master = None
+        #self.master.bind(("*", 0))
         self.client = None
         self.err = None
 
     def connect(self, address, port):
         self.master = socket(AF_INET, SOCK_STREAM)
+        self.master.bind(("*", 0))
         self.client, self.err = self.master.connect((address, port))
     #-----------------------------------
 

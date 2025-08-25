@@ -46,23 +46,9 @@ class Server:
             while self.err!="closed":
                 request, self.err = self.connectionSocket.recv(1024).decode()
 
-            #esta es la digestion del xml
-            method_name, params = parse_request(request)
-
-            #aca iria la digestion del http
-
-            if method_name in self.methods:
-                try:
-                    result = self.methods[method_name](*params)
-                    response = generate_response(result)    #aca hay que marsharleo a xml
-                except Exception as e:
-                    response = generate_response(f"Error: {str(e)}", fault_code=4)  #creo q este tendria q ser el generate_fault_response 
-            else:
-                response = generate_response("Method not found", fault_code=2) #idem aca con el generate_fault_response
-
-            #SENDALL NO SE PUEDE !!!!!!!!!!!!!!!!!!!!!!!!!!
-            self.connectionSocket.sendall(response.encode()) #hay q hacer el while q ensenaron en clase
-            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            sentence = self.connectionSocket.recv(1024).decode()
+            capitalizedSentence = sentence.upper()
+            self.connectionSocket.send(capitalizedSentence.encode())
             self.connectionSocket.close()
             print("Ravioles servidos!")
 
