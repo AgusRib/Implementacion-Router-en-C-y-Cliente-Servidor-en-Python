@@ -1,8 +1,8 @@
 from socket import *
 import socket
 import _socket
-import xmlrpc
-from xmlrpc import parse_request, generate_response 
+#import xmlrpc
+#from xmlrpc import parse_request, generate_response 
 
 #from socket import *
 #serverPort = 12000
@@ -34,14 +34,14 @@ class Server:
 
     def serve(self):
 
-        self.master = socket(AF_INET,SOCK_STREAM)
-        self.master.bind(self.address, self.port)
-        self.server = self.master.listen(1)
+        self.master = socket.socket(AF_INET,SOCK_STREAM)
+        self.master.bind((self.address, self.port))
+        self.master.listen(5)
 
         print("Pronto el server para recibir ravioles!")
 
         while True:
-            self.connectionSocket, self.err = self.server.accept()
+            self.connectionSocket, self.err = self.master.accept()
 
             while self.err!="closed":
                 request, self.err = self.connectionSocket.recv(1024).decode()

@@ -23,15 +23,19 @@ class Client:
         self.err = None
 
     def connect(self, address, port):
-        self.master = socket(AF_INET, SOCK_STREAM)
-        self.master.bind(("*", 0))
+        self.master = socket.socket(AF_INET, SOCK_STREAM)
+        self.master.bind((address, port))
         self.client, self.err = self.master.connect((address, port))
     #-----------------------------------
 
     def andar(self):
         sentence = input('Input lowercase sentence:')
 
-        self.cliente.send(sentence.encode())
-        modifiedSentence, self.err = self.cliente.recv(1024)
+        remain = sentence
+
+        while remain!="":
+            remain, self.err = self.client.send(sentence.encode())
+
+        modifiedSentence, self.err = self.client.recv(1024)
         print('From Server: ', modifiedSentence.decode())
-        self.cliente.close()
+        self.client.close()
