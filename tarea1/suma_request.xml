@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<methodCall>
+    <methodName>sum</methodName>
+    <params>
+        <param>
+            <value><int>25</int></value>
+        </param>
+        <param>
+            <value><int>272</int></value>
+        </param>
+    </params>
+</methodCall>
