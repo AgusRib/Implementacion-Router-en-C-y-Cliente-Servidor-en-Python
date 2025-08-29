@@ -1,3 +1,9 @@
+#curl para probarlo:
+
+#curl -X POST http://127.0.0.1:12000/ \
+#  -H "Content-Type: application/json" \
+#  -d '{"method": "suma", "params": [3, 5]}'
+
 
 from server2 import Server
 

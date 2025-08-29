@@ -26,6 +26,7 @@ class Client:
         self.client = None
         self.err = None
         self.address = None
+        self.port = None 
 
 
     #capaz que el connect es init Y connect, lo q pide la letra
@@ -35,6 +36,7 @@ class Client:
         self.client = self.master
         self.err = None
         self.address = address
+        self.port = port
     #---------------/\ REVISAR /\---------------------
 
 
@@ -56,7 +58,7 @@ class Client:
         formateadohttp = (
             "POST /RPC2 HTTP/1.0\r\n"
             "User-Agent: fedora/28.5.04 (Fedora42)\r\n"
-            F"Host: {self.address}\r\n"
+            f"Host: {self.address}:{self.port}\r\n"
             "Content-Type: text/xml\r\n"
             f"Content-Length: {len(envio_xmlBytes)}\r\n"
             "\r\n"
