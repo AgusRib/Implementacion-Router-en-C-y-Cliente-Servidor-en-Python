@@ -13,7 +13,7 @@ from xmlrpc.client import loads, dumps, Fault
 #print(’The server is ready to receive’)
 #while True:
 #self.connectionSocket, addr = serverSocket.accept()
-#sentence = connectionSocket.recv(1024).decode()
+#sentence = connectionSocket.recv(10).decode()
 #capitalizedSentence = sentence.upper()
 #connectionSocket.send(capitalizedSentence.encode())
 #connectionSocket.close()
@@ -48,7 +48,7 @@ class Server:
                 request = ""
                 content_length = 0
                 while '\r\n\r\n' not in request:
-                    parte = self.connectionSocket.recv(1024).decode()
+                    parte = self.connectionSocket.recv(10).decode()
                     request += parte
                 
                 # Busco el Content-Length en las cabeceras
@@ -62,7 +62,7 @@ class Server:
                 # Leer el body con contentlenght como cond dee parada
                 largocuerpo = len(request.split('\r\n\r\n')[1])
                 while largocuerpo < content_length:
-                    parte = self.connectionSocket.recv(1024).decode()
+                    parte = self.connectionSocket.recv(10).decode()
                     request += parte
                     largocuerpo += len(parte)
 

@@ -45,7 +45,7 @@ class Server:
 
             
         
-            sentence = self.connectionSocket.recv(4096).decode()
+            sentence = self.connectionSocket.recv(10).decode()
             capitalizedSentence = sentence.upper()
             
             total_sent = 0

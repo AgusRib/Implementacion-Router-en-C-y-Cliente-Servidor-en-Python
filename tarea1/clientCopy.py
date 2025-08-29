@@ -39,6 +39,6 @@ class Client:
           total_sent += sent
           
 
-        modifiedSentence = self.client.recv(1024)
+        modifiedSentence = self.client.recv(10)
         print('From Server: ', modifiedSentence.decode())
         self.client.close()
