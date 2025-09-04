@@ -49,7 +49,7 @@ class Server:
            faultCode = respuesta[0]
            faultString = respuesta[1]
            xml = '<?xml version="1.0"?>'
-           xml =+ "<methodResponse>"
+           xml += "<methodResponse>"
            xml += "<fault><value><struct>"
            
            xml += "<member><name>faultCode</name>"
