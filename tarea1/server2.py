@@ -2,7 +2,6 @@ from socket import *
 import socket
 import _socket
 import xml.etree.ElementTree as ET
-from xmlrpc.client import loads, dumps, Fault
 import threading
 
 class Server:
@@ -14,7 +13,74 @@ class Server:
         self.connectionSocket = None
         self.err = None
         self.methods = {}
+    
+    def construirXML(self, respuesta, esError):
+        if esError:
+           faultCode = respuesta[0]
+           faultString = respuesta[1]
+           xml = '<?xml version="1.0"?>'
+           xml += "<methodResponse>"
+           xml += "<fault><value><struct>"
+           
+           xml += "<member><name>faultCode</name>"
+           xml += f"<value><int>{faultCode}</int></value></member>"
+           
+           xml += "<member><name>faultString</name>"
+           xml += f"<value><string>{faultString}</string></value></member>"
+           
+           xml += "</struct></value></fault>"
+           xml += "</methodResponse>"
 
+        else:
+            xml = '<?xml version="1.0"?>'
+            xml += "<methodResponse>"
+            
+            #Obtengo el tipo de dato de la respuesta y lo agrego al XML
+            xml += "<params><param><value>"
+            if isinstance(respuesta, int):
+                xml += f"<int>{respuesta}</int>"
+            elif isinstance(respuesta, str):
+                xml += f"<string>{respuesta}</string>"
+            elif isinstance(respuesta, list):
+                xml += "<array><data>"
+                for item in respuesta:
+                    if isinstance(item, int):
+                        xml += f"<value><int>{item}</int></value>"
+                    elif isinstance(item, str):
+                        xml += f"<value><string>{item}</string></value>"
+                    # Agregar más tipos de datos según sea necesario
+                xml += "</data></array>"
+            xml += "</value></param></params>"
+            
+            xml += "</methodResponse>"
+        return xml
+
+    def parseRequest(self, request):
+        try:
+            root = ET.fromstring(request)
+            method_name = root.find('methodName').text
+            params = []
+            
+            for param in root.findall('.//param/value'):
+                if param.find('int') is not None:
+                    params.append(int(param.find('int').text))
+                elif param.find('string') is not None:
+                    params.append(param.find('string').text)
+                elif param.find('array') is not None:
+                    data = param.find('.//data')
+                    items = []
+                    for value in data.findall('value'):
+                        if value.find('int') is not None:
+                            items.append(int(value.find('int').text))
+                        elif value.find('string') is not None:
+                            items.append(value.find('string').text)
+                        # Agregar más tipos de datos según sea necesario
+                    params.append(items)
+
+            return method_name, tuple(params)
+        except ET.ParseError as e:
+            raise Exception from e
+    
     def add_method(self, method):
         self.methods[method.__name__] = method
 
@@ -59,29 +125,36 @@ class Server:
 
             # Unmarshallea el request de XML-RPC a string (lo hace automaticamente loads)
             try:  
-                params, method_name = loads(request.split('\r\n\r\n')[1])
+                
+                method_name,params=self.parseRequest(request.split('\r\n\r\n')[1])
+                
+                
             except Exception as e:
-                response = dumps(Fault(1, f"Error al parsear XML: {str(e)}"), methodresponse=True)#dumps marshallea la respuesta a XML
+                response = self.construirXML((1, f"Error de parseo XML en el servidor: {str(e)}"),True)
             else:
                 #Solo sigue si no hubo error de parsing
                 if method_name not in self.methods:
-                    response = dumps(Fault(2, f"No existe el metodo: {method_name}"), methodresponse=True)
+                    response = self.construirXML((2, f"Metodo {method_name} no encontrado"),True)
+                    print(response)
                 else:
                     try:
                         result = self.methods[method_name](*params)
-                        response = dumps((result,), methodresponse=True)
+                        print (f"Resultado del metodo {method_name} con parametros {params} es {result} en el thread {threading.current_thread().name}")
+                        response = self.construirXML(result,False)
+                        print (f"Response construido: {response} en el thread {threading.current_thread().name}")
                     except TypeError as e:
-                        response = dumps(Fault(3, f"Error en parametros del metodo invocado: {str(e)}"), methodresponse=True)
+                        response = self.construirXML((3, f"Error en los parametros del metodo: {str(e)}"),True)
                     except Exception as e:
-                        response = dumps(Fault(4, f"Error interno en la ejecucion del metodo: {str(e)}"), methodresponse=True)
+                        response = self.construirXML((4, f"Error al ejecutar el metodo: {str(e)}"),True)
 
         except Exception as e:
             if not response:
-                response = dumps(Fault(5, f"Error del servidor: {str(e)}"), methodresponse=True)
+               
+                response = self.construirXML((5, f"Error inesperado en el servidor: {str(e)}"),True)
 
         finally:
             try:
-        
+                print(response)
                 responsebytes = response.encode()
                 formateadohttp = (
                     f"HTTP/1.1 {http_cabezal}\r\n"
