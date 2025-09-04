@@ -117,7 +117,6 @@ class Server:
                         break
                     request += parte
                     largocuerpo += len(parte)
-                print (request.split('\r\n\r\n')[1])
                 # Unmarshallea el request de XML-RPC a string (lo hace automaticamente loads)
                 try:  
                     method_name, params = self.parseRequest(request.split('\r\n\r\n')[1])
