@@ -180,7 +180,7 @@ class Server:
                 while total_sent < len(http_response):
                     sent = self.connectionSocket.send(http_response[total_sent:])
                     total_sent+=sent
-
+            print(f"Respuesta enviada al cliente {threading.current_thread().name}")
             finally:
                 client_socket.close()
 
