@@ -95,8 +95,8 @@ class Client:
         ahora = datetime.now()
         ahora = ahora.strftime("%a, %d %b %Y %H:%M:%S GMT")
         formateadohttp = (
-            "POST /RPC2 HTTP/1.0\r\n"
-            "User-Agent: fedora/28.5.04 (Fedora42)\r\n"
+            "POST HTTP/1.0\r\n"
+            "User-Agent: probandoProbando/01 (Test purposes only)\r\n"
             f"Date: {ahora}\r\n"
             f"Host: {self.address}:{self.port}\r\n"
             "Content-Type: text/xml\r\n"
