@@ -1,3 +1,4 @@
+from datetime import datetime
 from socket import *
 import socket
 import _socket
@@ -164,19 +165,22 @@ class Server:
             try:
                 print(response)
                 responsebytes = response.encode()
+                ahora=datetime.now()
+                ahora=ahora.strftime("%Y-%m-%d %H:%M:%S GMT")
                 formateadohttp = (
                     f"HTTP/1.1 {http_cabezal}\r\n"
+                    f"Date: {ahora}\r\n"
                     "Content-Type: text/xml\r\n"
                     f"Content-Length: {len(responsebytes)}\r\n"
                     "\r\n"
                 )
                 http_response = formateadohttp.encode() + responsebytes
                 
-                remaining = http_response
-                while remaining:
-                    sent = client_socket.send(remaining)
-                    remaining = remaining[sent:]
-                print(f"Respuesta enviada al cliente {threading.current_thread().name}")
+                total_sent = 0
+                while total_sent < len(http_response):
+                    sent = self.connectionSocket.send(http_response[total_sent:])
+                    total_sent+=sent
+
             finally:
                 client_socket.close()
 
