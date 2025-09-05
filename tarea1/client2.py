@@ -61,6 +61,8 @@ class Client:
                         xml += f"<value><string>{item}</string></value>"
                     # Agregar más tipos de datos según sea necesario
                 xml += "</data></array>"
+            elif isinstance(arg, float):
+                xml += f"<double>{arg}</double>"
             xml += "</value></param>"
         xml += "</params>"
         xml += "</methodCall>"
@@ -90,7 +92,9 @@ class Client:
                         items.append(value.find('string').text)
                     # Agregar más tipos de datos según sea necesario
                 return items
-            
+            elif param.find('double') is not None:
+                return float(param.find('double').text)
+                
 
 
     def __getattr__(self, name): #checkear si es lo mas conveniente, si no pudeo directamente implementar todo en el getattr o su alternativa

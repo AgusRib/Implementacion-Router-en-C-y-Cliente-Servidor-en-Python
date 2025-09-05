@@ -18,7 +18,7 @@ from xmlrpc.client import loads, dumps, Fault
 #client.send(capitalizedSentence.encode())
 #client.close()
 
-class Client:
+class Cliente2:
 
     #def __init__(self):
         #self.master = None
@@ -111,7 +111,7 @@ class Client:
             "User-Agent: fedora/28.5.04 (Fedora42)\r\n"
             f"Host: {self.address}:{self.port}\r\n"
             "Content-Type: text/xml\r\n"
-            "
+            f"Content-Length: \r\n"
             "\r\n"
         )
         envio_http = formateadohttp.encode() + envio_xmlBytes

@@ -51,6 +51,8 @@ class Server:
                         xml += f"<value><string>{item}</string></value>"
                     # Agregar más tipos de datos según sea necesario
                 xml += "</data></array>"
+            elif isinstance(respuesta, float):
+                xml += f"<double>{respuesta}</double>"
             xml += "</value></param></params>"
             
             xml += "</methodResponse>"
@@ -77,7 +79,8 @@ class Server:
                             items.append(value.find('string').text)
                         # Agregar más tipos de datos según sea necesario
                     params.append(items)
-
+                elif param.find('double') is not None:
+                    params.append(float(param.find('double').text))
             return method_name, tuple(params)
         except ET.ParseError as e:
             raise Exception from e
@@ -87,7 +90,7 @@ class Server:
 
     def handler_cliente(self, client_socket):
         """Maneja un cliente individual en su propio thread"""
-        client_socket.settimeout(30)  
+        client_socket.settimeout(60)  
         http_cabezal= "200 OK"
         response = None
         try:
@@ -95,11 +98,18 @@ class Server:
             request = ""
             content_length = 0
             while '\r\n\r\n' not in request:
-                parte = client_socket.recv(10).decode()
+                client_socket.settimeout(30)
+                try:
+                  parte = client_socket.recv(10).decode()
+                except socket.timeout:
+                    if('\r\n\r\n' not in request):
+                      http_cabezal= "400 Bad Request"
+                      raise Exception("no contiene los dos espacios del formato http")
+                      
+                    raise Exception("Timeout esperando datos del cliente")
+
                 request += parte
-                if len(request)>4096 and '\r\n\r\n' not in request:
-                    http_cabezal= "400 Bad Request"
-                    raise Exception("Header demasiado grande o no contiene los dos espacios del formato http")
+                
 
             
              # Verificar que sea método POST
@@ -144,13 +154,11 @@ class Server:
                 #Solo sigue si no hubo error de parsing
                 if method_name not in self.methods:
                     response = self.construirXML((2, f"Metodo {method_name} no encontrado"),True)
-                    print(response)
+                    
                 else:
                     try:
                         result = self.methods[method_name](*params)
-                        print (f"Resultado del metodo {method_name} con parametros {params} es {result} en el thread {threading.current_thread().name}")
                         response = self.construirXML(result,False)
-                        print (f"Response construido: {response} en el thread {threading.current_thread().name}")
                     except TypeError as e:
                         response = self.construirXML((3, f"Error en los parametros del metodo: {str(e)}"),True)
                     except Exception as e:
@@ -163,7 +171,7 @@ class Server:
 
         finally:
             try:
-                print(response)
+
                 responsebytes = response.encode()
                 ahora=datetime.now()
                 ahora=ahora.strftime("%Y-%m-%d %H:%M:%S GMT")
@@ -178,9 +186,9 @@ class Server:
                 
                 total_sent = 0
                 while total_sent < len(http_response):
-                    sent = self.connectionSocket.send(http_response[total_sent:])
+                    sent = client_socket.send(http_response[total_sent:])
                     total_sent+=sent
-            print(f"Respuesta enviada al cliente {threading.current_thread().name}")
+                print(f"Respuesta enviada al cliente {threading.current_thread().name}")
             finally:
                 client_socket.close()
 

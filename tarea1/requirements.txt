@@ -1,5 +1,0 @@
-xmlrpc_redes
-Flask
-requests
-xmltodict
-pytest

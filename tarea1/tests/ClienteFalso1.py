@@ -18,7 +18,7 @@ from xmlrpc.client import loads, dumps, Fault
 #client.send(capitalizedSentence.encode())
 #client.close()
 
-class Client:
+class ClienteFalso1:
 
     #def __init__(self):
         #self.master = None

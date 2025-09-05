@@ -1,11 +1,11 @@
 from client2 import Client
 import threading
 import time
-import ClienteFalso1
-import ClienteFalso2
-import ClienteFalso3
-import ClienteFalso4
-import ClienteFalso5
+from ClienteFalso1 import ClienteFalso1
+from ClienteFalso2 import Cliente2
+from ClienteFalso3 import ClienteFalso3
+from ClienteFalso4 import ClienteFalso4
+from ClienteFalso5 import ClienteFalso5
 
 def test_server1():
     print("Test Server1 de manejo de Enteros")
@@ -35,8 +35,21 @@ def test_server1():
         print(f"multiplicar(7, 6) = {result2}")
     except Exception as e:
         print(f"Error testing multiplicar: {e}")
-    # Test ordenar 
-
+     
+    try:
+        client.connect("127.0.0.1", 12000)
+        result = client.dividir(10, 2)
+        print(f"dividir(10, 2) = {result}")
+        client.connect("127.0.0.1", 12000)
+        result2 = client.dividir(9, 3)
+        print(f"dividir(9, 3) = {result2}")
+    except Exception as e:
+        print(f"Error testing dividir: {e}")
+    
+    
+    
+    
+    # Test ordenar
     try:
         client.connect("127.0.0.1", 12000)
         result = client.ordenar([5, 2, 9, 1])
@@ -77,6 +90,14 @@ def test_server1():
         print("Error: ordenar sin lista no lanzó excepción")
     except Exception as e:
         print(f"OK: ordenar sin lista lanzó excepción: {e}")
+
+    #Test error interno funcion 
+    try:
+        client.connect("127.0.0.1", 12000)
+        result = client.dividir(5,0)
+        print("Error: dividir por cero no lanzó excepción")
+    except Exception as e:
+        print(f"OK: dividir por cero lanzó excepción: {e}")
 
 def test_server2():
     print("Test Server2 de manejo de Strings")
@@ -156,7 +177,7 @@ def test_server2():
 
     # ClienteFalso1 usa GET en vez de POST
     try:
-        clientefalso1 = Client()
+        clientefalso1 = ClienteFalso1()
         clientefalso1.connect("127.0.0.1",12000)
         resultado = clientefalso1.suma(5,3)
         print("Error: ClienteFalso1 no lanzó excepción al usar GET en vez de POST",{resultado})
@@ -165,14 +186,41 @@ def test_server2():
 
     #ClienteFalso2 no envía Content-Length
     try:
-        clientefalso2=Client()
+        clientefalso2=Cliente2()
         clientefalso2.connect("127.0.0.1",12000)
         resultado = clientefalso2.suma(5,3)
         print("Error: ClienteFalso2 no lanzó excepción al no enviar Content-Length",{resultado})
     except Exception as e:
         print(f"OK: ClienteFalso2 lanzó excepción al no enviar Content-Length: {e}")
 
+    #ClienteFalso3 envía Content-Length incorrecto
+    try:
+        clientefalso3=ClienteFalso3()
+        clientefalso3.connect("127.0.0.1",12000)
+        resultado = clientefalso3.suma(5,3)
+        print("Error: ClienteFalso3 no lanzó excepción al enviar Content-Length incorrecto",{resultado})
+    except Exception as e:
+        print(f"OK: ClienteFalso3 lanzó excepción al enviar Content-Length incorrecto: {e}")
 
+    try:
+        #ClienteFalso4 envía sin espacios los headers HTTP
+        clientefalso4=ClienteFalso4()
+        clientefalso4.connect("127.0.0.1",12000)
+        resultado = clientefalso4.suma(5,3)
+        print("Error: ClienteFalso4 no lanzó excepción al enviar XML mal formado",{resultado})
+    except Exception as e:
+        print(f"OK: ClienteFalso4 lanzó excepción al enviar XML mal formado: {e}")
+    
+    try:
+        #ClienteFalso5 envía Xml mal formado
+        clientefalso5=ClienteFalso5()
+        clientefalso5.connect("127.0.0.1",12000)
+        resultado = clientefalso5.suma(5,3)
+        print("Error: ClienteFalso5 no lanzó excepción al enviar XML con método inexistente",{resultado})
+    except Exception as e:
+        print(f"OK: ClienteFalso5 lanzó excepción al enviar XML con método inexistente: {e}")
+
+   
 
 
 def main():

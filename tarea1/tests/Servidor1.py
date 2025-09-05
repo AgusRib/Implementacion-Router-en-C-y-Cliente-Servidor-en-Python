@@ -14,6 +14,11 @@ def suma(a, b):
 def multiplicar(a, b):
     return a * b
 
+def dividir(a, b):
+    if b == 0:
+        raise ValueError("No se puede dividir por cero")
+    return a/b
+
 def ordenar(numeros):
     return sorted(numeros)
     
@@ -25,6 +30,7 @@ def main():
     server1.add_method(suma)
     server1.add_method(multiplicar)
     server1.add_method(ordenar)
+    server1.add_method(dividir)
     server1.serve()
 
 
