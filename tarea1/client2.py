@@ -43,26 +43,26 @@ class Client:
         
         xml = "<?xml version='1.0'?>"
         xml += "<methodCall>"
-        xml += f"<methodName>{method_name}</methodName>"
+        xml += "<methodName>{}</methodName>".format(method_name)
         xml += "<params>"
         for arg in args:
             xml += "<param><value>"
             if isinstance(arg, int):
-                xml += f"<int>{arg}</int>"
+                xml += "<int>{}</int>".format(arg)
             elif isinstance(arg, str):
-                xml += f"<string>{arg}</string>"
+                xml +="<string>{}</string>".format(arg)
             # Agregar más tipos de datos según sea necesario
             elif isinstance(arg, list):
                 xml += "<array><data>"
                 for item in arg:
                     if isinstance(item, int):
-                        xml += f"<value><int>{item}</int></value>"
+                        xml += "<value><int>{}</int></value>".format(item)
                     elif isinstance(item, str):
-                        xml += f"<value><string>{item}</string></value>"
+                        xml += "<value><string>{}</string></value>".format(item)
                     # Agregar más tipos de datos según sea necesario
                 xml += "</data></array>"
             elif isinstance(arg, float):
-                xml += f"<double>{arg}</double>"
+                xml += "<double>{}</double>".format(arg)
             xml += "</value></param>"
         xml += "</params>"
         xml += "</methodCall>"
@@ -116,10 +116,10 @@ class Client:
         formateadohttp = (
             "POST HTTP/1.0\r\n"
             "User-Agent: probandoProbando/01 (Test purposes only)\r\n"
-            f"Date: {ahora}\r\n"
-            f"Host: {self.address}:{self.port}\r\n"
+            "Date: {}\r\n".format(ahora)
+            "Host: {}:{}\r\n".format(self.address,self.port)
             "Content-Type: text/xml\r\n"
-            f"Content-Length: {len(envio_xmlBytes)}\r\n"
+            "Content-Length: {}\r\n".format(len(envio_xmlBytes))
             "\r\n"
         )
         envio_http = formateadohttp.encode() + envio_xmlBytes
@@ -172,7 +172,7 @@ class Client:
             except xml.parsers.expat.ExpatError as e:
                 # Error específico de parseo XML en el cliente
                 errparseo=1
-                raise Exception(1, f"Error de parseo XML en el cliente: {str(e)}")
+                raise Exception(1, "Error de parseo XML en el cliente: {}".format(str(e)))
                 
         except Exception as e:
             if fault1234==1 or errparseo==1:
@@ -180,5 +180,5 @@ class Client:
                 # Re-raise faults del servidor sin modificar
         
             # Error imprevisto en el cliente
-            raise Exception(5, f"Error inesperado en el cliente: {str(e)}")
+            raise Exception(5, "Error inesperado en el cliente: {}".format(str(e)))
 

@@ -7,13 +7,6 @@ from ClienteFalso2 import Cliente2
 from ClienteFalso3 import ClienteFalso3
 from ClienteFalso4 import ClienteFalso4
 from ClienteFalso5 import ClienteFalso5
-import random
-
-
-def generate_lorem_words(num_words):
-    words = ["lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit", "sed", "do", "eiusmod"]
-    return " ".join(random.choices(words, k=num_words))
-
 
 def test_server1(): #==========================================
     print("Test Server1 de manejo de Enteros")
@@ -190,7 +183,7 @@ def test_Falsos(): #===========================================
     # ClienteFalso1 usa GET en vez de POST
     try:
         clientefalso1 = ClienteFalso1()
-        clientefalso1.connect("150.150.0.2",12000)
+        clientefalso1.connect("100.100.0.2",12000)
         resultado = clientefalso1.suma(5,3)
         print("Error: ClienteFalso1 no lanzó excepción al usar GET en vez de POST",{resultado})
     except Exception as e:
@@ -199,7 +192,7 @@ def test_Falsos(): #===========================================
     #ClienteFalso2 no envía valor de Content-Length
     try:
         clientefalso2=Cliente2()
-        clientefalso2.connect("150.150.0.2",12000)
+        clientefalso2.connect("100.100.0.2",12000)
         resultado = clientefalso2.suma(5,3)
         print("Error: ClienteFalso2 no lanzó excepción al no enviar Content-Length",{resultado})
     except Exception as e:
@@ -235,7 +228,7 @@ def test_Falsos(): #===========================================
 def testsDemandados():
     
     try:
-        clienteD1 = Client()
+        clienteD1 = Cliente2()
         clienteD1.connect("150.150.0.2",12000)
         resultado = clienteD1.quienEs()
         print(f"{resultado}")
@@ -243,25 +236,17 @@ def testsDemandados():
         print(f"Error: {e}")
 
     try:
-        clienteD2 = Client()
+        clienteD2 = Cliente2()
         clienteD2.connect("100.100.0.2",13000)
         resultado = clienteD2.concatenameXVeces(5,"miau")
         print(f"{resultado}")
     except Exception as e:
         print(f"Error: {e}")
 
-   try:
-        clienteD3 = Client()
-        clienteD3.connect("127.0.0.1",13000)
-        textazo  = generate_lorem_words(20000)
-        resultado = clienteD3.repetime(textazo)
-        print(f"{resultado}")
-    except Exception as e:
-        print(f"Error: {e}")
-
+   
 
     try:
-        clienteD4 = Client()
+        clienteD4 = Cliente2()
         clienteD4.connect("100.100.0.2",13000)
         resultado = clienteD4.demorame("pio pio")
         print(f"{resultado}")
@@ -271,8 +256,8 @@ def testsDemandados():
 def testErroresDemandados():
      # Test método inexistente
     try:
-        client = Client()
-        client.connect("100.100.0.2", 13000)
+        client = Cliente2()
+        client.connect("127.0.0.1", 13000)
         result = client.metodo_inexistente(1, 2)
         print("Error: método inexistente no lanzó excepción")
     except Exception as e:
@@ -280,23 +265,23 @@ def testErroresDemandados():
 
     # Test parámetros inválidos
     try:
-        client = Client()
-        client.connect("100.100.0.2", 13000)
+        client = Cliente2()
+        client.connect("127.0.0.1", 13000)
         result = client.concat(123, "paulo")
         print("Error: concat con número y stringg no lanzó excepción",{result})
     except Exception as e:
         print(f"OK: concat con números lanzó excepción: {e}")
     
     try:
-        client = Client()
-        client.connect("100.100.0.2", 13000)
+        client = Cliente2()
+        client.connect("127.0.0.1", 13000)
         result = client.sonIguales("test", 123,33)
         print("Error: sonIguales con 3 parametros no lanzó excepción",{result})
     except Exception as e:
         print(f"OK: sonIguales con 3 parametros lanzó excepción: {e}")
     
     try:
-        client = Client()
+        client = Cliente2()
         client.connect("100.100.0.2",13000)
         result = client.sonIguales("test")
         print("Error: sonIguales con 1 parametro no lanzó excepción",{result})
@@ -305,7 +290,7 @@ def testErroresDemandados():
     
     #Test error interno funcion 
     try:
-        client = Client()
+        client = Cliente2()
         client.connect("150.150.0.2", 12000)
         result = client.dividir(5,0)
         print("Error: dividir por cero no lanzó excepción")

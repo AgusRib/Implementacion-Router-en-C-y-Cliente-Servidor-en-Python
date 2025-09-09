@@ -188,7 +188,7 @@ class Server:
                 while total_sent < len(http_response):
                     sent = client_socket.send(http_response[total_sent:])
                     total_sent+=sent
-                print(f"Respuesta enviada al cliente {threading.current_thread().name}")
+                print("Respuesta enviada al cliente {threading.current_thread().name}")
             finally:
                 client_socket.close()
 
@@ -201,7 +201,7 @@ class Server:
 
         while True:
             client_socket, addr = self.master.accept()
-            print(f"Nueva conexión desde {addr}")
+            print("Nueva conexión desde {}".format(address))
             # Crear nuevo thread para manejar el cliente
             client_thread = threading.Thread(
                 target=self.handler_cliente,

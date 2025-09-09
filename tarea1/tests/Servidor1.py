@@ -28,7 +28,7 @@ def quienEs():
 
 
 def main():
-    server1 = Server("127.0.0.1", 12000)
+    server1 = Server("150.150.0.2", 12000)
     server1.add_method(suma)
     server1.add_method(multiplicar)
     server1.add_method(ordenar)
