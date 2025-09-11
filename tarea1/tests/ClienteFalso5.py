@@ -149,25 +149,18 @@ class ClienteFalso5:
 
                 largocuerpo += len(parte)
             
-            # Unmarshallea el respuesta de XML-RPC a string
+     # Unmarshallea el respuesta de XML-RPC a string
             try:  
                 resultado = self.parseResponse(respuesta.split('\r\n\r\n')[1])
-                
-                    
-                return resultado  # Si no es fault, retornar el resultado
+                self.client.close()  # Cierra el socket después de la llamada exitosa
+                return resultado
             except Exception as e:
-                
+                self.client.close()  # Cierra el socket si hubo error en parseo
                 fault1234=1
                 raise Exception(str(e))
-            except xml.parsers.expat.ExpatError as e:
-                # Error específico de parseo XML en el cliente
-                errparseo=1
-                raise Exception(1, f"Error de parseo XML en el cliente: {str(e)}")
-                
         except Exception as e:
-            if fault1234==1 or errparseo==1:
+            self.client.close()  # Cierra el socket si hubo error en recepción
+            if fault1234==1:
                 raise
-                # Re-raise faults del servidor sin modificar
-        
-            # Error imprevisto en el cliente
             raise Exception(5, f"Error inesperado en el cliente: {str(e)}")
+

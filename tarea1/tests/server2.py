@@ -90,7 +90,6 @@ class Server:
 
     def handler_cliente(self, client_socket):
         """Maneja un cliente individual en su propio thread"""
-        client_socket.settimeout(60)  
         http_cabezal= "200 OK"
         response = None
         try:
@@ -98,7 +97,7 @@ class Server:
             request = ""
             content_length = 0
             while '\r\n\r\n' not in request:
-                client_socket.settimeout(30)
+                client_socket.settimeout(120)
                 try:
                   parte = client_socket.recv(10).decode()
                 except socket.timeout:
@@ -176,7 +175,7 @@ class Server:
                 ahora=datetime.now()
                 ahora=ahora.strftime("%Y-%m-%d %H:%M:%S GMT")
                 formateadohttp = (
-                    "HTTP/1.1 {}\r\n".format(http_cabezal) +
+                    "HTTP/1.0 {}\r\n".format(http_cabezal) +  # <-- espacio agregado
                     "Date: {}\r\n".format(ahora) +
                     "Content-Type: text/xml\r\n" +
                     "Content-Length: {}\r\n".format(len(responsebytes)) +

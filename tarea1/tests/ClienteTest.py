@@ -1,4 +1,4 @@
-from tarea1.tests.client2 import Client
+from client2 import Client
 import threading
 import time
 #from lorem_text import lorem
@@ -27,7 +27,6 @@ def test_server1(): #==========================================
         result = client.suma(5, 3)
         print(f"suma(5, 3) = {result}")
         client.connect("150.150.0.2", 12000)
-        
         result2 = client.suma(10, 20)
         print(f"suma(10, 20) = {result2}")
     except Exception as e:
@@ -66,8 +65,6 @@ def test_server1(): #==========================================
     except Exception as e:
         print(f"Error testing ordenar: {e}")
 
-
-
     # Test error cases-----------------------------------------
     print("\nTesting casos invalidos:")
     print("-" * 50)
@@ -103,9 +100,6 @@ def test_server1(): #==========================================
         print("Error: dividir por cero no lanzó excepción")
     except Exception as e:
         print(f"OK: dividir por cero lanzó excepción: {e}")
-
-
-
 
 def test_server2(): #==========================================
     print("Test Server2 de manejo de Strings")
@@ -146,8 +140,7 @@ def test_server2(): #==========================================
     except Exception as e:
         print(f"Error testing CantOcurrencias: {e}")
     
-
-   # Test error cases------------------------------------------
+    # Test error cases------------------------------------------
     print("\nTesting error cases:")
     print("-" * 50)
     # Test método inexistente
@@ -177,16 +170,13 @@ def test_server2(): #==========================================
         print("Error: CantOcurrencias con string y número no lanzó excepción",{result})
     except Exception as e:
         print(f"OK: CantOcurrencias con string y número lanzó excepción: {e}")
-    
-
 
 def test_Falsos(): #===========================================
 
-   #Test errores de protocolo HTTP y parseo XML
+    #Test errores de protocolo HTTP y parseo XML
     print("\nTesting errores de protocolo HTTP y parseo XML:")
     print("-" * 50)
     
-
     # ClienteFalso1 usa GET en vez de POST
     try:
         clientefalso1 = ClienteFalso1()
@@ -233,7 +223,6 @@ def test_Falsos(): #===========================================
         print(f"OK: ClienteFalso5 lanzó excepción al enviar XML con método inexistente: {e}")
 
 def testsDemandados():
-    
     try:
         clienteD1 = Client()
         clienteD1.connect("150.150.0.2",12000)
@@ -250,15 +239,15 @@ def testsDemandados():
     except Exception as e:
         print(f"Error: {e}")
 
-   try:
+    try:
         clienteD3 = Client()
-        clienteD3.connect("127.0.0.1",13000)
+        clienteD3.connect("100.100.0.2",13000)
         textazo  = generate_lorem_words(20000)
         resultado = clienteD3.repetime(textazo)
-        print(f"{resultado}")
+        if resultado == textazo:
+            print("repetime con texto de 20,000 palabras OK")
     except Exception as e:
         print(f"Error: {e}")
-
 
     try:
         clienteD4 = Client()
@@ -269,7 +258,7 @@ def testsDemandados():
         print(f"Error: {e}")
 
 def testErroresDemandados():
-     # Test método inexistente
+    # Test método inexistente
     try:
         client = Client()
         client.connect("100.100.0.2", 13000)

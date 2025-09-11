@@ -1,4 +1,4 @@
-from tarea1.tests.client2 import Client
+from client2 import Client
 import threading
 import time
 
@@ -11,6 +11,7 @@ def client_thread(thread_id):
         
         # Cada thread hace diferentes llamadas para testear concurrencia
         if thread_id % 3 == 0:
+            client.client.close()
             result = client.suma(thread_id, 10)
             print(f"Thread {thread_id}: suma({thread_id}, 10) = {result}")
         elif thread_id % 3 == 1:

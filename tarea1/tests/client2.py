@@ -3,7 +3,7 @@ from socket import *
 import socket
 import _socket
 import xml.etree.ElementTree as ET
-from xmlrpc.client import loads, dumps, Fault
+
 
 
 #from socket import *
@@ -43,26 +43,26 @@ class Client:
         
         xml = "<?xml version='1.0'?>"
         xml += "<methodCall>"
-        xml += "<methodName>{}</methodName>".format(method_name)
+        xml += f"<methodName>{method_name}</methodName>"
         xml += "<params>"
         for arg in args:
             xml += "<param><value>"
             if isinstance(arg, int):
-                xml += "<int>{}</int>".format(arg)
+                xml += f"<int>{arg}</int>"
             elif isinstance(arg, str):
-                xml +="<string>{}</string>".format(arg)
+                xml += f"<string>{arg}</string>"
             # Agregar más tipos de datos según sea necesario
             elif isinstance(arg, list):
                 xml += "<array><data>"
                 for item in arg:
                     if isinstance(item, int):
-                        xml += "<value><int>{}</int></value>".format(item)
+                        xml += f"<value><int>{item}</int></value>"
                     elif isinstance(item, str):
-                        xml += "<value><string>{}</string></value>".format(item)
+                        xml += f"<value><string>{item}</string></value>"
                     # Agregar más tipos de datos según sea necesario
                 xml += "</data></array>"
             elif isinstance(arg, float):
-                xml += "<double>{}</double>".format(arg)
+                xml += f"<double>{arg}</double>"
             xml += "</value></param>"
         xml += "</params>"
         xml += "</methodCall>"
@@ -116,10 +116,10 @@ class Client:
         formateadohttp = (
             "POST HTTP/1.0\r\n"
             "User-Agent: probandoProbando/01 (Test purposes only)\r\n"
-            "Date: {}\r\n".format(ahora)
-            "Host: {}:{}\r\n".format(self.address,self.port)
+            f"Date: {ahora}\r\n"
+            f"Host: {self.address}:{self.port}\r\n"
             "Content-Type: text/xml\r\n"
-            "Content-Length: {}\r\n".format(len(envio_xmlBytes))
+            f"Content-Length: {len(envio_xmlBytes)}\r\n"
             "\r\n"
         )
         envio_http = formateadohttp.encode() + envio_xmlBytes
@@ -134,7 +134,7 @@ class Client:
 
         # Recibimo -------------------------
         try:
-            # Leo las lineas de cabecera hasta encontrar el separador \r\n\r\nd (un retorno de carro y dos enters)
+            # Leo las lineas de cabecera hasta encontrar el separador \r\n\r\n (un retorno de carro y dos enters)
             respuesta = ""
             content_length = 0
             while '\r\n\r\n' not in respuesta:
@@ -144,7 +144,6 @@ class Client:
             # Busco el Content-Length en las cabeceras
             found = False
             headers = respuesta.split('\r\n\r\n')[0]
-             
             for line in headers.split('\r\n'):
                 if not found and 'Content-Length:' in line:
                     content_length = int(line.split(':')[1].strip())
@@ -152,33 +151,24 @@ class Client:
             
             # Leer el body con contentlenght como cond de parada
             largocuerpo = len(respuesta.split('\r\n\r\n')[1])
-            
             while largocuerpo < content_length:
                 parte = self.client.recv(10).decode()
                 respuesta += parte
-
                 largocuerpo += len(parte)
-            
+
             # Unmarshallea el respuesta de XML-RPC a string
             try:  
                 resultado = self.parseResponse(respuesta.split('\r\n\r\n')[1])
-                
-                    
-                return resultado  # Si no es fault, retornar el resultado
+                self.client.close()  # Cierra el socket después de la llamada exitosa
+                return resultado
             except Exception as e:
-                
+                self.client.close()  # Cierra el socket si hubo error en parseo
                 fault1234=1
                 raise Exception(str(e))
-            except xml.parsers.expat.ExpatError as e:
-                # Error específico de parseo XML en el cliente
-                errparseo=1
-                raise Exception(1, "Error de parseo XML en el cliente: {}".format(str(e)))
-                
         except Exception as e:
-            if fault1234==1 or errparseo==1:
+            self.client.close()  # Cierra el socket si hubo error en recepción
+            if fault1234==1:
                 raise
-                # Re-raise faults del servidor sin modificar
-        
-            # Error imprevisto en el cliente
-            raise Exception(5, "Error inesperado en el cliente: {}".format(str(e)))
+            raise Exception(5, f"Error inesperado en el cliente: {str(e)}")
+
 
