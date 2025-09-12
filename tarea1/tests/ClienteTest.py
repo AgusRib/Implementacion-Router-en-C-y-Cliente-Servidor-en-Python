@@ -303,6 +303,7 @@ def testErroresDemandados():
 
 def main():
     print("Empieza test")
+    time.sleep(2)
     test_server1()
     test_server2()
     test_Falsos()

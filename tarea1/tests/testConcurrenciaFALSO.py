@@ -36,7 +36,7 @@ def test_concurrencia(num_clients=10):
         threads.append(t)
     
     # Iniciar todos los threads
-    start_time = time.time()
+    
     for t in threads:
         t.start()
          # Pequeña pausa entre inicio de clientes
@@ -45,9 +45,7 @@ def test_concurrencia(num_clients=10):
     for t in threads:
         t.join()
     
-    elapsed_time = time.time() - start_time
-    
-    print(f"Test completado en {elapsed_time:.2f} segundos")
+   
 
 if __name__ == "__main__":
     test_concurrencia(50)  # Probar con 10 clientes concurrentes
