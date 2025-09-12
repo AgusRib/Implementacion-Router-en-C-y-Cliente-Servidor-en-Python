@@ -97,7 +97,7 @@ class Server:
             request = ""
             content_length = 0
             while '\r\n\r\n' not in request:
-                client_socket.settimeout(120)
+                client_socket.settimeout(30)
                 try:
                   parte = client_socket.recv(10).decode()
                 except socket.timeout:

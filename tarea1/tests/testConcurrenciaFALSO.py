@@ -6,7 +6,7 @@ def client_thread(thread_id):
     """Función que ejecuta cada cliente en su propio thread"""
     try:
         client = Client()
-        client.connect("150.150.0.2", 12000)
+        client.connect("150.150.0.2", 17000)
         time.sleep(6) 
         
         # Cada thread hace diferentes llamadas para testear concurrencia
