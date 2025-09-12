@@ -104,8 +104,9 @@ class Server:
                     if('\r\n\r\n' not in request):
                       http_cabezal= "400 Bad Request"
                       raise Exception("no contiene los dos espacios del formato http")
-                      
-                    raise Exception("Timeout esperando datos del cliente")
+                    else:  
+                        http_cabezal= "408 Timeout"
+                        raise Exception("Timeout esperando datos del cliente")
 
                 request += parte
                 
@@ -136,8 +137,14 @@ class Server:
                 raise Exception("No se encontro Content-Length en las lineas de cabecera")
             # Leer el body con contentlenght como cond dee parada
             largocuerpo = len(request.split('\r\n\r\n')[1])
+            
             while largocuerpo < content_length:
-                parte = client_socket.recv(10).decode()
+                client_socket.settimeout(120)
+                try:
+                    parte = client_socket.recv(10).decode()
+                except socket.timeout:
+                    http_cabezal= "408 Timeout"
+                    raise Exception("Timeout esperando datos del cliente")
                 request += parte
                 largocuerpo += len(parte)
 
