@@ -40,8 +40,8 @@ void sr_arp_request_send(struct sr_instance *sr, uint32_t ip) {
 
   struct sr_if *iface = sr->if_list;
   while (iface) {
-    int arpLen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
-    uint8_t *arpPacket = (uint8_t *) malloc(arpLen);
+    int arpPacketLen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+    uint8_t *arpPacket = (uint8_t *) malloc(arpPacketLen);
     if (!arpPacket) {
       iface = iface->next;
       continue;
@@ -68,7 +68,7 @@ void sr_arp_request_send(struct sr_instance *sr, uint32_t ip) {
     arpHdr->ar_sip = iface->ip;
     arpHdr->ar_tip = ip;
 
-    sr_send_packet(sr, arpPacket, arpLen, iface->name);
+    sr_send_packet(sr, arpPacket, arpPacketLen, iface->name);
 
     free(arpPacket);
 
@@ -76,6 +76,25 @@ void sr_arp_request_send(struct sr_instance *sr, uint32_t ip) {
   }
 
   printf("$$$ -> Send ARP request processing complete.\n");
+
+  /* Ejemplo de la letra:
+  
+    int arpPacketLen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
+    uint8_t *arpPacket = malloc(arpPacketLen);
+    sr_ethernet_hdr_t *ethHdr = (struct sr_ethernet_hdr *) arpPacket;
+    memcpy(ethHdr->ether_dhost, <host destino>, ETHER_ADDR_LEN);
+    memcpy(ethHdr->ether_shost, <host origen>, sizeof(uint8_t) * ETHER_ADDR_LEN);
+    ethHdr->ether_type = htons(ethertype_arp);
+    sr_arp_hdr_t *arpHdr = (sr_arp_hdr_t *) (arpPacket + sizeof(sr_ethernet_hdr_t));
+    arpHdr->ar_hrd = htons(1);
+    arpHdr->ar_pro = htons(2048);
+    arpHdr->ar_hln = 6;
+    arpHdr->ar_pln = 4;
+    arpHdr->ar_op = htons(arp_op_request);
+    memcpy(arpHdr->ar_sha, <sender address>, ETHER_ADDR_LEN);
+    memcpy(arpHdr->ar_tha, <target address>, ETHER_ADDR_LEN);
+    arpHdr->ar_sip = <sender IP>;
+    arpHdr->ar_tip = <target IP>;*/
 }
 
 /*
