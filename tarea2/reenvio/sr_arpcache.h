@@ -66,6 +66,7 @@ struct sr_arpreq {
     uint32_t times_sent;        /* Number of times this request was sent. You 
                                    should update this. */
     struct sr_packet *packets;  /* List of pkts waiting on this req to finish */
+    char *iface;
     struct sr_arpreq *next;
 };
 
@@ -76,6 +77,7 @@ struct sr_arpcache {
     pthread_mutexattr_t attr;
 };
 
+void sr_arp_request_send(struct sr_instance *sr, uint32_t ip, char *iface);
 void sr_arpcache_sweepreqs(struct sr_instance *sr);
 void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req);
 void host_unreachable(struct sr_instance *sr, struct sr_arpreq *req);

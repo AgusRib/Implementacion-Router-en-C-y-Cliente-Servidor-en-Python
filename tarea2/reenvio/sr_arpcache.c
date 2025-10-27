@@ -11,20 +11,19 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_utils.h"
+#include "sr_rt.h"
 
 /*
 	Envía una solicitud ARP.
 */
-void sr_arp_request_send(struct sr_instance *sr, uint32_t ip) {
+void sr_arp_request_send(struct sr_instance *sr, uint32_t ip, char *iface) {
 
-
-  printf("$$$ -> Send ARP request.\n");
-
+    printf("$$$ -> Send ARP request.\n");
   /* 
   * COLOQUE AQÍ SU CÓDIGO
   * SUGERENCIAS: 
   * - Construya el cabezal Ethernet y agregue dirección de destino de broadcast
-  * - Envíe la solicitud ARP desde la interfaz conectada a la subred de la IP cuya MAC se desea conocer
+  Envíe la solicitud ARP desde la interfaz pasada por parámetro, correspondiente a la conectada a la subred de la IP cuya MAC se desea conocer
   * - Agregue la dirección de origen y el tipo de paquete
   * - Construya el cabezal ARP y envíe el paquete
   */
@@ -38,16 +37,33 @@ void sr_arp_request_send(struct sr_instance *sr, uint32_t ip) {
        - ARP sha = iface MAC, tha = 0, s_ip = iface IP, t_ip = ip (target)
   */
 
-  struct sr_rt *mejor_entrada = sr_prefijo_mas_largo(sr, ip);
- 
+    /* Determinar interfaz de salida: usar la pasada por parámetro si existe,
+       sino elegir la mejor entrada de ruta para la IP destino */
+    struct sr_if *out_iface = NULL;
+    if (iface) {
+        out_iface = sr_get_interface(sr, iface);
+    }
+    if (!out_iface) {
+        struct sr_rt *mejor_entrada = sr_prefijo_mas_largo(sr, ip);
+        if (!mejor_entrada) {
+            fprintf(stderr, "sr_arp_request_send: no route to host %u\n", ntohl(ip));
+            return;
+        }
+        out_iface = sr_get_interface(sr, mejor_entrada->interface);
+    }
+
+    if (!out_iface) {
+        fprintf(stderr, "sr_arp_request_send: no outgoing interface found\n");
+        return;
+    }
+
     int arpPacketLen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t);
     uint8_t *arpPacket = (uint8_t *) malloc(arpPacketLen);
-    struct sr_if *iface = sr_get_interface(sr, mejor_entrada->interface);
-
     sr_ethernet_hdr_t *ethHdr = (sr_ethernet_hdr_t *) arpPacket;
-    ensamblar_eth_header(ethHdr,0xff, iface->addr, ethertype_arp);
-
-    //ensambla arp header
+    uint8_t broadcast_addr[ETHER_ADDR_LEN];
+    memset(broadcast_addr, 0xff, ETHER_ADDR_LEN);
+    ensamblar_eth_header(ethHdr, out_iface->addr, broadcast_addr, ethertype_arp);
+    /*ensambla arp header*/
     sr_arp_hdr_t *arpHdr = (sr_arp_hdr_t *) (arpPacket + sizeof(sr_ethernet_hdr_t));
     arpHdr->ar_hrd = htons(1);
     arpHdr->ar_pro = htons(ethertype_ip);
@@ -55,14 +71,14 @@ void sr_arp_request_send(struct sr_instance *sr, uint32_t ip) {
     arpHdr->ar_pln = 4;
     arpHdr->ar_op = htons(arp_op_request);
 
-    memcpy(arpHdr->ar_sha, iface->addr, ETHER_ADDR_LEN);
+    memcpy(arpHdr->ar_sha, out_iface->addr, ETHER_ADDR_LEN);
     memset(arpHdr->ar_tha, 0x00, ETHER_ADDR_LEN);
 
     /* iface->ip is expected to be stored in network byte order like other codepaths */
-    arpHdr->ar_sip = iface->ip;
+    arpHdr->ar_sip = out_iface->ip;
     arpHdr->ar_tip = ip;
 
-    sr_send_packet(sr, arpPacket, arpPacketLen, iface->name);
+    sr_send_packet(sr, arpPacket, arpPacketLen, out_iface->name);
 
     free(arpPacket);
 
@@ -102,11 +118,11 @@ void sr_arp_request_send(struct sr_instance *sr, uint32_t ip) {
 */
 void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
     time_t current_time = time(NULL);
-    double time_diff = difftime(current_time, req.sent);
-    if (time_diff >= 1.0 || req.sent == 0) {
+    double time_diff = difftime(current_time, req->sent);
+    if (time_diff >= 1.0 || req->sent == 0) {
 
-    
-    if (req.times_sent >= 5){
+
+    if (req->times_sent >= 5){
         host_unreachable(sr, req);
         sr_arpreq_destroy(&sr->cache, req);
         return;
@@ -114,7 +130,7 @@ void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
     else {
        
         if (time_diff >= 1.0) {
-            sr_arp_request_send(sr, req->ip);
+            sr_arp_request_send(sr, req->ip, req->iface);
             req->sent = current_time;
             req->times_sent += 1;
         }
@@ -212,6 +228,7 @@ struct sr_arpreq *sr_arpcache_queuereq(struct sr_arpcache *cache,
         req = (struct sr_arpreq *) calloc(1, sizeof(struct sr_arpreq));
         req->ip = ip;
         req->next = cache->requests;
+        req->iface = iface;
         cache->requests = req;
     }
     
