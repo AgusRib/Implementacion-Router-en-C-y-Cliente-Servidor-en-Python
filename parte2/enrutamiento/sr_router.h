@@ -84,5 +84,14 @@ void sr_add_interface(struct sr_instance* , const char* );
 void sr_set_ether_ip(struct sr_instance* , uint32_t );
 void sr_set_ether_addr(struct sr_instance* , const unsigned char* );
 void sr_print_if_list(struct sr_instance* );
+void sr_arp_reply_send_pending_packets(struct sr_instance *sr,
+                                        struct sr_arpreq *arpReq,
+                                        uint8_t *dhost,
+                                        uint8_t *shost,
+                                        struct sr_if *iface);
+void ensamblar_eth_header(sr_ethernet_hdr_t* eth_hdr, uint8_t* src_mac, uint8_t* dest_mac, uint16_t eth_type);
+void ensamblar_ip_header(sr_ip_hdr_t* ip_hdr, uint32_t src_ip, uint32_t dest_ip, uint16_t total_len, uint8_t protocol);
+struct sr_rt* sr_prefijo_mas_largo(struct sr_instance* sr, uint32_t ip);
+
 
 #endif /* SR_ROUTER_H */
