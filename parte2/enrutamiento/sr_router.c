@@ -266,12 +266,68 @@ void sr_handle_ip_packet(struct sr_instance *sr,
                 }
             }
 
-            /* If packet to router and TCP/UDP -> send ICMP port unreachable */
-            if (ip_hdr->ip_p == ip_protocol_tcp || ip_hdr->ip_p == ip_protocol_udp) {
-                /* send ICMP port unreachable back to source */
-                sr_send_icmp_error_packet(3, 3, sr, ip_hdr->ip_src,  packet + sizeof(sr_ethernet_hdr_t));
-                return;
-            }
+            /* ete paketito udepe viene akii */
+             if (ip_hdr->ip_p == ip_protocol_udp) {
+
+                 if (ip_total_len < ip_hdr_len + 8) {
+                     return;
+                 }
+                 uint8_t *udp_ptr = packet  + sizeof(sr_ethernet_hdr_t) +  ip_hdr_len;
+                 uint16_t udp_dst_port_n;
+                 memcpy(&udp_dst_port_n, udp_ptr +  2, sizeof(uint16_t)); /* dst port tiene de offset 2 */
+                 uint16_t udp_dst_port = ntohs(udp_dst_port_n);
+ 
+                 /* RIP usa UDP port 520 (y multicast 224.0.0.9).  */
+                 if (udp_dst_port == 520) {
+
+
+
+
+
+                    /* ESTO ESTA MAL AUUUNNNN FALTA COMPLETAR EL SIGNIFICADO DE LAS VARSS
+                    
+                    sobre todo ip_hdr_len q corresponde a ip_off, como mierda lo armo, pq el resto creo q esta pronto*/
+
+
+
+                        unsigned int rip_off = sizeof(sr_ethernet_hdr_t) + ip_hdr_len ; /* GPT RECOMIENDA: UDP header es 8 bytes */
+                        unsigned int rip_len = ip_total_len - ip_hdr_len - 8;
+
+
+
+
+
+
+                     sr_rip_handle_packet(sr, packet, len, ip_hdr_len, rip_off, rip_len, dest_iface->name);
+                     
+                     
+
+
+
+
+
+
+
+
+
+
+
+                     
+                     
+                     
+                     return;
+                 }
+ 
+                 /* Non-RIP UDP destined to router -> ICMP port unreachable */
+                 sr_send_icmp_error_packet(3, 3, sr, ip_hdr->ip_src, packet  + sizeof(sr_ethernet_hdr_t));
+                 return;
+             }
+ 
+             if (ip_hdr->ip_p == ip_protocol_tcp) {
+                 /* TCP to router (no service) -> ICMP port unreachable */
+                 sr_send_icmp_error_packet(3, 3, sr, ip_hdr->ip_src, packet  + sizeof(sr_ethernet_hdr_t));
+                 return;
+             }
 
             /* For other protocols destined to router, just drop */
             return;
