@@ -60,7 +60,111 @@ void sr_send_icmp_error_packet(uint8_t type,
                               uint8_t *ipPacket)
 {
 
-  /* COLOQUE AQUÍ SU CÓDIGO*/
+  assert(sr);
+    assert(ipPacket);
+
+    struct sr_ip_hdr *orig_ip_hdr = (struct sr_ip_hdr *)ipPacket;
+    struct sr_rt *rt_entry = sr_prefijo_mas_largo(sr, ipDst);
+    if (!rt_entry) {
+      printf("$$$ -> ERROR no se encontró entrada en la tabla de reenvío.\n");
+        return;
+    }
+
+    struct sr_if *interfaz_salida = sr_get_interface(sr, rt_entry->interface);
+    if (!interfaz_salida) {
+      printf("$$$ -> ERROR no se encontró la interfaz de salida.\n");
+        return;
+    }
+
+
+    uint32_t next_hop_ip = (rt_entry->gw.s_addr != 0) ? rt_entry->gw.s_addr : ipDst;
+
+  
+    uint16_t icmp_len = 0;
+    uint8_t *icmp_packet = NULL;
+
+    if (type == 3) {
+        icmp_len = sizeof(sr_icmp_t3_hdr_t);
+        icmp_packet = malloc(icmp_len);
+        if (!icmp_packet) { return; }
+
+        sr_icmp_t3_hdr_t *icmp3 = (sr_icmp_t3_hdr_t *)icmp_packet;
+        icmp3->icmp_type = type;
+        icmp3->icmp_code = code;
+        icmp3->unused = 0;
+        icmp3->next_mtu = 0;
+        memcpy(icmp3->data, ipPacket, ICMP_DATA_SIZE);
+        icmp3->icmp_sum = 0;
+        icmp3->icmp_sum = icmp3_cksum(icmp3, sizeof(sr_icmp_t3_hdr_t));
+    } else if (type == 11) {
+        icmp_len = sizeof(sr_icmp_t11_hdr_t);
+        icmp_packet = malloc(icmp_len);
+        if (!icmp_packet) { return; }
+
+        sr_icmp_t11_hdr_t *icmp11 = (sr_icmp_t11_hdr_t *)icmp_packet;
+        icmp11->icmp_type = type;
+        icmp11->icmp_code = code;
+        icmp11->unused = 0;
+        memcpy(icmp11->data, ipPacket, ICMP_DATA_SIZE);
+        icmp11->icmp_sum = 0;
+        icmp11->icmp_sum = icmp11_cksum(icmp11,  sizeof(sr_icmp_t11_hdr_t));
+    } else {
+        return;
+    }
+
+    /* Armar IP header */
+    uint8_t ip_nupacket[sizeof(sr_ip_hdr_t) + icmp_len];
+    struct sr_ip_hdr *ip_hdr = (struct sr_ip_hdr *)ip_nupacket;
+    ensamblar_ip_header(ip_hdr, interfaz_salida->ip, orig_ip_hdr->ip_src,
+                    sizeof(ip_nupacket), ip_protocol_icmp);
+    memcpy(ip_nupacket + sizeof(sr_ip_hdr_t), icmp_packet, icmp_len);
+
+    /* Resolver MAC destino (ARP) */
+    struct sr_arpentry *entry = sr_arpcache_lookup(&sr->cache, next_hop_ip);
+    if (entry) {
+        uint8_t paquete_completo[sizeof(sr_ethernet_hdr_t) + sizeof(ip_nupacket)];
+         struct sr_ethernet_hdr *eth_hdr = (struct sr_ethernet_hdr *)paquete_completo;
+
+        ensamblar_eth_header(eth_hdr, interfaz_salida->addr, entry->mac, ethertype_ip);
+        memcpy(paquete_completo + sizeof(sr_ethernet_hdr_t), ip_nupacket, sizeof(ip_nupacket));
+
+        sr_send_packet(sr, paquete_completo, sizeof(paquete_completo), interfaz_salida->name);
+        free(entry);
+    } else {
+        /* Encolar un frame ETHERNET + IP/ICMP completo. La cola y
+         * sr_arp_reply_send_pending_packets esperan que el buffer tenga
+         * un encabezado Ethernet para poder sobrescribir las MACs cuando
+         * llegue la respuesta ARP. */
+        int full_len = sizeof(sr_ethernet_hdr_t) + sizeof(ip_nupacket);
+        uint8_t *full_pkt = (uint8_t *)malloc(full_len);
+        if (full_pkt) {
+            sr_ethernet_hdr_t *eth_pending = (sr_ethernet_hdr_t *)full_pkt;
+            uint8_t zero_mac[ETHER_ADDR_LEN];
+            memset(zero_mac, 0x00, ETHER_ADDR_LEN);
+
+            /* src = interfaz_salida->addr, dst = 00:00:.. (se rellenará con ARP reply) */
+            ensamblar_eth_header(eth_pending, interfaz_salida->addr, zero_mac, ethertype_ip);
+            memcpy(full_pkt + sizeof(sr_ethernet_hdr_t), ip_nupacket, sizeof(ip_nupacket));
+
+            /* encolar el frame completo */
+            sr_arpcache_queuereq(&sr->cache, next_hop_ip, full_pkt, full_len, interfaz_salida->name);
+
+            /* enviar la solicitud ARP */
+            sr_arp_request_send(sr, next_hop_ip, interfaz_salida->name);
+
+            free(full_pkt);
+        } else {
+            /* Si no hay memoria, al menos intentar enviar ARP para resolver la MAC */
+            sr_arp_request_send(sr, next_hop_ip, interfaz_salida->name);
+        }
+
+    }
+
+    /* liberar el buffer ICMP temporal */
+    if (icmp_packet) {
+        free(icmp_packet);
+        icmp_packet = NULL;
+    }
 
 } /* -- sr_send_icmp_error_packet -- */
 
@@ -162,12 +266,68 @@ void sr_handle_ip_packet(struct sr_instance *sr,
                 }
             }
 
-            /* If packet to router and TCP/UDP -> send ICMP port unreachable */
-            if (ip_hdr->ip_p == ip_protocol_tcp || ip_hdr->ip_p == ip_protocol_udp) {
-                /* send ICMP port unreachable back to source */
-                sr_send_icmp_error_packet(3, 3, sr, ip_hdr->ip_src,  packet + sizeof(sr_ethernet_hdr_t));
-                return;
-            }
+            /* ete paketito udepe viene akii */
+             if (ip_hdr->ip_p == ip_protocol_udp) {
+
+                 if (ip_total_len < ip_hdr_len + 8) {
+                     return;
+                 }
+                 uint8_t *udp_ptr = packet  + sizeof(sr_ethernet_hdr_t) +  ip_hdr_len;
+                 uint16_t udp_dst_port_n;
+                 memcpy(&udp_dst_port_n, udp_ptr +  2, sizeof(uint16_t)); /* dst port tiene de offset 2 */
+                 uint16_t udp_dst_port = ntohs(udp_dst_port_n);
+ 
+                 /* RIP usa UDP port 520 (y multicast 224.0.0.9).  */
+                 if (udp_dst_port == 520) {
+
+
+
+
+
+                    /* ESTO ESTA MAL AUUUNNNN FALTA COMPLETAR EL SIGNIFICADO DE LAS VARSS
+                    
+                    sobre todo ip_hdr_len q corresponde a ip_off, como mierda lo armo, pq el resto creo q esta pronto*/
+
+
+
+                        unsigned int rip_off = sizeof(sr_ethernet_hdr_t) + ip_hdr_len ; /* GPT RECOMIENDA: UDP header es 8 bytes */
+                        unsigned int rip_len = ip_total_len - ip_hdr_len - 8;
+
+
+
+
+
+
+                     sr_rip_handle_packet(sr, packet, len, ip_hdr_len, rip_off, rip_len, dest_iface->name);
+                     
+                     
+
+
+
+
+
+
+
+
+
+
+
+                     
+                     
+                     
+                     return;
+                 }
+ 
+                 /* Non-RIP UDP destined to router -> ICMP port unreachable */
+                 sr_send_icmp_error_packet(3, 3, sr, ip_hdr->ip_src, packet  + sizeof(sr_ethernet_hdr_t));
+                 return;
+             }
+ 
+             if (ip_hdr->ip_p == ip_protocol_tcp) {
+                 /* TCP to router (no service) -> ICMP port unreachable */
+                 sr_send_icmp_error_packet(3, 3, sr, ip_hdr->ip_src, packet  + sizeof(sr_ethernet_hdr_t));
+                 return;
+             }
 
             /* For other protocols destined to router, just drop */
             return;
@@ -245,12 +405,69 @@ void sr_handle_arp_packet(struct sr_instance *sr,
         char *interface /* lent */,
         sr_ethernet_hdr_t *eHdr) {
 
-  /* Imprimo el cabezal ARP */
-  printf("*** -> It is an ARP packet. Print ARP header.\n");
-  print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
+  if (len < sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t)) {
+        fprintf(stderr, "ARP packet too short\n");
+        return;
+    }
 
-  /* COLOQUE SU CÓDIGO AQUÍ
+    sr_arp_hdr_t *arp_hdr = (sr_arp_hdr_t *)(packet + sizeof(sr_ethernet_hdr_t));
 
+    printf("*** -> It is an ARP packet. Print ARP header.\n");
+    print_hdr_arp(packet + sizeof(sr_ethernet_hdr_t));
+
+    /* Si es un ARP request */
+    if (ntohs(arp_hdr->ar_op) == arp_op_request) {
+        struct sr_if *iface_iter = sr->if_list;
+        while (iface_iter) {
+            if (ntohl(arp_hdr->ar_tip) == ntohl(iface_iter->ip)) {
+                /* ARP request dirigido a esta interfaz, armar reply */
+                uint8_t *reply = malloc(sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t));
+                if (!reply) return;
+
+                sr_ethernet_hdr_t *replyEthHdr = (sr_ethernet_hdr_t *)reply;
+                sr_arp_hdr_t *replyArpHdr = (sr_arp_hdr_t *)(reply + sizeof(sr_ethernet_hdr_t));
+
+                /* Construir Ethernet header */
+                ensamblar_eth_header(replyEthHdr, iface_iter->addr, arp_hdr->ar_sha, ethertype_arp);
+
+                /* Construir ARP header */
+                replyArpHdr->ar_hrd = htons(arp_hrd_ethernet);
+                replyArpHdr->ar_pro = htons(ethertype_ip);
+                replyArpHdr->ar_hln = ETHER_ADDR_LEN;
+                replyArpHdr->ar_pln = 4;
+                replyArpHdr->ar_op = htons(arp_op_reply);
+                memcpy(replyArpHdr->ar_sha, iface_iter->addr, ETHER_ADDR_LEN);
+                replyArpHdr->ar_sip = iface_iter->ip;
+                memcpy(replyArpHdr->ar_tha, arp_hdr->ar_sha, ETHER_ADDR_LEN);
+                replyArpHdr->ar_tip = arp_hdr->ar_sip;
+
+                /* Enviar reply por la misma interfaz que llegó el request */
+                sr_send_packet(sr, reply, sizeof(sr_ethernet_hdr_t) + sizeof(sr_arp_hdr_t), interface);
+                free(reply);
+
+                break;  /* ya respondimos, no seguimos iterando */
+            }
+            iface_iter = iface_iter->next;
+        }
+    }
+    /* Si es un ARP reply */
+    else if (ntohs(arp_hdr->ar_op) == arp_op_reply) {
+        /* Insertar el mapeo en la caché y obtener la solicitud (si existe)
+           sr_arpcache_insert devuelve la sr_arpreq asociada si había paquetes
+           pendientes para esta IP. */
+        struct sr_arpreq *req = sr_arpcache_insert(&(sr->cache), arp_hdr->ar_sha, arp_hdr->ar_sip);
+        if (req != NULL) {
+            /* Obtener la interfaz por la cual llegó el ARP para confirmar pendientes */
+            struct sr_if *iface = sr_get_interface(sr, interface);
+            if (iface) {
+                sr_arp_reply_send_pending_packets(sr, req, arp_hdr->ar_sha, iface->addr, iface);
+            } 
+            /* Finalmente destruir la solicitud (libera la lista de paquetes)
+               sr_arp_reply_send_pending_packets ya hizo send de copias. */
+            sr_arpreq_destroy(&(sr->cache), req);
+        }
+    }
+    /*
   SUGERENCIAS:
   - Verifique si se trata de un ARP request o ARP reply
   - Si es una ARP request, antes de responder verifique si el mensaje consulta por la dirección MAC asociada a una dirección IP configurada en una interfaz del router

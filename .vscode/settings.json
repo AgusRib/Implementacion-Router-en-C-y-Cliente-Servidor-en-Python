@@ -3,5 +3,8 @@
         "tarea2"
     ],
     "python.testing.unittestEnabled": false,
-    "python.testing.pytestEnabled": true
+    "python.testing.pytestEnabled": true,
+    "files.associations": {
+        "sr_rt.h": "c"
+    }
 }

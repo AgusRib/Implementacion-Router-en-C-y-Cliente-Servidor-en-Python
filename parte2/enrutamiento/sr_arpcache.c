@@ -11,6 +11,7 @@
 #include "sr_if.h"
 #include "sr_protocol.h"
 #include "sr_utils.h"
+#include "sr_rt.h"
 
 /*
 	Envía una solicitud ARP.
@@ -90,12 +91,45 @@ void sr_arp_request_send(struct sr_instance *sr, uint32_t ip, char* iface) {
   - no olvide actualizar los campos de la solicitud luego de reenviarla
 */
 void handle_arpreq(struct sr_instance *sr, struct sr_arpreq *req) {
-    /* COLOQUE SU CÓDIGO AQUÍ */
+    time_t current_time = time(NULL);
+    double time_diff = difftime(current_time, req->sent);
+    if (time_diff >= 1.0 || req->sent == 0) {
+
+
+    if (req->times_sent >= 5){
+        host_unreachable(sr, req);
+        sr_arpreq_destroy(&sr->cache, req);
+        return;
+    }
+    else {
+       
+        if (time_diff >= 1.0) {
+            sr_arp_request_send(sr, req->ip, req->iface);
+            req->sent = current_time;
+            req->times_sent += 1;
+        }
+    }
+}
 }
 
 /* Envía un mensaje ICMP host unreachable a los emisores de los paquetes esperando en la cola de una solicitud ARP */
 void host_unreachable(struct sr_instance *sr, struct sr_arpreq *req) {
-    /* COLOQUE SU CÓDIGO AQUÍ */
+    struct sr_packet *packet = req->packets;
+
+    while (packet != NULL) {
+        sr_ip_hdr_t *ip_hdr = (sr_ip_hdr_t *)(packet->buf + sizeof(sr_ethernet_hdr_t));
+
+        /* Enviar ICMP host unreachable al emisor original */
+        sr_send_icmp_error_packet(
+            3,                   /* type = Destination Unreachable */
+            1,                   /* code = Host Unreachable */
+            sr,
+            ip_hdr->ip_src,      /* IP destino del ICMP = IP origen del paquete original */
+            (uint8_t *)ip_hdr    /* Paquete IP original */
+        );
+
+        packet = packet->next;
+    }
 }
 
 /* NO DEBERÍA TENER QUE MODIFICAR EL CÓDIGO A PARTIR DE AQUÍ. */
