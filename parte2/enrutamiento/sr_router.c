@@ -333,3 +333,59 @@ void sr_handlepacket(struct sr_instance* sr,
   }
 
 }/* end sr_ForwardPacket */
+
+struct sr_rt* sr_prefijo_mas_largo(struct sr_instance* sr, uint32_t ip)
+{
+    struct sr_rt* rt_iterador = sr->routing_table;
+    struct sr_rt* mejor_entrada = NULL;
+    uint32_t mask_maslargo = 0;
+
+    while (rt_iterador != NULL) {
+        uint32_t masked_ip = ip & rt_iterador->mask.s_addr;
+        uint32_t masked_dest = rt_iterador->dest.s_addr & rt_iterador->mask.s_addr;
+
+        if (masked_ip == masked_dest) {
+            uint32_t mask_len = ntohl(rt_iterador->mask.s_addr);
+            if (mask_len > mask_maslargo) {
+                mask_maslargo = mask_len;
+                mejor_entrada = rt_iterador;
+            }
+        }
+        rt_iterador = rt_iterador->next;
+    }
+    return mejor_entrada;
+}
+
+   /* construye el cabezal ip*/
+
+void ensamblar_ip_header(struct sr_ip_hdr *ip_hdr,
+                     uint32_t src_ip,
+                     uint32_t dst_ip, 
+                     uint8_t ttl,
+                     uint16_t total_len,
+                     uint8_t protocol)
+{
+    ip_hdr->ip_v = 4;
+    ip_hdr->ip_hl = 5;
+    ip_hdr->ip_tos = 0;
+    ip_hdr->ip_len = htons(total_len);
+    ip_hdr->ip_id = 0;
+    ip_hdr->ip_off = 0;
+    ip_hdr->ip_ttl = ttl;
+    ip_hdr->ip_p = protocol;
+    ip_hdr->ip_src = src_ip;
+    ip_hdr->ip_dst = dst_ip;
+    ip_hdr->ip_sum = 0;
+    ip_hdr->ip_sum = ip_cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+}
+
+/* construye el cabezal ethernet*/
+void ensamblar_eth_header(struct sr_ethernet_hdr *eth_hdr,
+                      uint8_t *src_mac,
+                      uint8_t *dst_mac,
+                      uint16_t ethertype)
+{
+    memcpy(eth_hdr->ether_shost, src_mac, ETHER_ADDR_LEN);
+    memcpy(eth_hdr->ether_dhost, dst_mac, ETHER_ADDR_LEN);
+    eth_hdr->ether_type = htons(ethertype);
+}
