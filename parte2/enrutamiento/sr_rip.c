@@ -335,19 +335,54 @@ void sr_handle_rip_packet(struct sr_instance* sr,
 }
 
 void sr_rip_send_response(struct sr_instance* sr, struct sr_if* interface, uint32_t ipDst) {
-    
     /* Reservar buffer para paquete completo con cabecera Ethernet */
-    
+    int bufflen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) +sizeof(sr_udp_hdr_t) + sizeof(sr_rip_packet_t) + (sizeof(sr_rip_entry_t) * MAX_RIP_ENTRIES);
+    uint8_t* buff = malloc(bufflen);
+   
+
     /* Construir cabecera Ethernet */
+    ensamblar_eth_header((sr_ethernet_hdr_t*)buff, interface->addr, rip_multicast_mac, ethertype_ip);
     
     /* Construir cabecera IP */
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*)(buff + sizeof(sr_ethernet_hdr_t));
+    ensamblar_ip_header(ip_hdr, interface->ip, ipDst, 1, 0 /* luego se actualiza */, ip_protocol_udp);
         /* RIP usa TTL=1 */
     
     /* Construir cabecera UDP */
+    sr_udp_hdr_t* udp_hdr = (sr_udp_hdr_t*)(buff + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
+    ensamblar_udp_header(udp_hdr, RIP_PORT, RIP_PORT, 0 /* luego se actualiza */);
     
     /* Construir paquete RIP con las entradas de la tabla */
         /* Armar encabezado RIP de la respuesta */
+        sr_rip_packet_t* rip_hdr = (sr_rip_packet_t*)(buff + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_udp_hdr_t));
+        ensamblar_rip_header(rip_hdr, RIP_COMMAND_RESPONSE, RIP_VERSION);
+
         /* Recorrer toda la tabla de enrutamiento  */
+        struct sr_rt* rt_iter = sr->routing_table;
+        int entry_count = 0;
+
+        while (rt_iter != NULL && entry_count < MAX_RIP_ENTRIES) {
+        /* Llenar cada entrada con la información de la tabla de enrutamiento */
+          sr_rip_entry_t* rip_entry = (sr_rip_entry_t*)(buff + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) +sizeof(sr_udp_hdr_t) + sizeof(sr_rip_packet_t) + (entry_count * sizeof(sr_rip_entry_t)));
+          rip_entry->family = htons(2);  // IPv4
+          rip_entry->route_tag = htons(rt_iter->route_tag);
+          rip_entry->ip = rt_iter->dest.s_addr;
+          rip_entry->mask = rt_iter->mask.s_addr;
+          rip_entry->next_hop = 0; // Siempre 0.0.0.0
+            
+
+          if (rt_iter->learned_from == ipDst || rt_iter->valid == 0) {
+                // Split horizon con reversinha envenenadinha
+                rip_entry->metric = htonl(RIP_INFINITY);
+            } else  {
+                uint32_t metric = (rt_iter->metric < RIP_INFINITY) ? rt_iter->metric : RIP_INFINITY;
+                rip_entry->metric = htonl(metric);
+            }
+
+            rt_iter = rt_iter->next;
+            entry_count++;
+        }
+
         /* Considerar split horizon con poisoned reverse y rutas expiradas por timeout cuando corresponda */
         /* Normalizar métrica a rango RIP (1..INFINITY) */
 
@@ -358,11 +393,26 @@ void sr_rip_send_response(struct sr_instance* sr, struct sr_if* interface, uint3
            - next_hop: siempre 0.0.0.0 */
 
     /* Calcular longitudes del paquete */
-    
+    int total_len = bufflen-(MAX_RIP_ENTRIES - entry_count)*sizeof(sr_rip_entry_t);
+    /* Actualizar longitudes en IP y UDP */
+    uint16_t ip_len = total_len - sizeof(sr_ethernet_hdr_t);
+    uint16_t udp_len = sizeof(sr_udp_hdr_t) + sizeof(sr_rip_packet_t) + (entry_count * sizeof(sr_rip_entry_t));
+    ip_hdr->ip_len = htons(ip_len);
+    udp_hdr->len = htons(udp_len);
+
     /* Calcular checksums */
-    
+    ip_hdr->ip_sum = 0;
+    ip_hdr->ip_sum = ip_cksum(ip_hdr, sizeof(sr_ip_hdr_t));
+
+    udp_hdr->udp_sum = 0;
+    udp_hdr->udp_sum = udp_cksum(udp_hdr, ip_hdr, (uint8_t*)rip_hdr, udp_len);
+
     /* Enviar paquete */
+    sr_send_packet(sr, buff, total_len, interface->name);
+
+    free(buff);
 }
+
 
 void* sr_rip_send_requests(void* arg) {
     sleep(3); // Esperar a que se inicialice todo
@@ -482,6 +532,54 @@ void* sr_rip_periodic_advertisement(void* arg) {
 /* Chequea las rutas y marca las que expiran por timeout */
 void* sr_rip_timeout_manager(void* arg) {
     struct sr_instance* sr = arg;
+    sr_rt* rt_iter;
+
+   while(1) {
+        sleep(1); // Esperar 1 segundo entre comprobaciones.
+
+        int table_changed = 0;
+
+        pthread_mutex_lock(&rip_metadata_lock);
+
+        time_t current_time = time(NULL);
+
+        /* Recorre la tabla de enrutamiento */
+        rt_iter = sr->routing_table;
+        while (rt_iter != NULL) {
+            /* para cada ruta dinámica (aprendida de un vecino) que no se haya actualizado
+            en el intervalo de timeout (RIP_TIMEOUT_SEC), marca la ruta como inválida, fija su métrica a
+            INFINITY y anota el tiempo de inicio del proceso de garbage collection. */
+            if (rt_iter->learned_from != 0 && rt_iter->valid &&
+                difftime(current_time, rt_iter->last_updated) >= RIP_TIMEOUT_SEC) {
+                
+                Debug("RIP: Ruta hacia ");
+                print_addr_ip_int(ntohl(rt_iter->dest.s_addr));
+                Debug(" timeouteada, marcando como inválida.\n");
+
+                rt_iter->metric = RIP_INFINITY;
+                rt_iter->valid = 0;
+                rt_iter->garbage_collection_time = current_time;
+                table_changed = 1;
+            }
+            rt_iter = rt_iter->next;
+        }
+
+        /* Si se detectan cambios, se desencadena una actualización (triggered update)
+        hacia los vecinos y se actualiza/visualiza la tabla de enrutamiento. */
+        if (table_changed) {
+            Debug("\n-> RIP: Trigger update por cambios en la tabla\n");
+            struct sr_if* interface = sr->if_list;
+            while (interface != NULL) {
+                sr_rip_send_response(sr, interface, RIP_IP);
+                interface = interface->next;
+            }
+
+            Debug("-> RIP: Imprimo la tabla de forwarding\n");
+            print_routing_table(sr);
+        }
+
+        pthread_mutex_unlock(&rip_metadata_lock);
+    }
     
     /*  - Bucle periódico que espera 1 segundo entre comprobaciones.
         - Recorre la tabla de enrutamiento y para cada ruta dinámica (aprendida de un vecino) que no se haya actualizado
@@ -599,3 +697,14 @@ int sr_rip_init(struct sr_instance* sr) {
     return 0;
 }
 
+ensamblar_udp_header(sr_udp_hdr_t* udp_hdr, uint16_t src_port, uint16_t dest_port, uint16_t length) {
+    udp_hdr->src_port = htons(src_port);
+    udp_hdr->dest_port = htons(dest_port);
+    udp_hdr->length = htons(length);
+    udp_hdr->checksum = 0; // Inicialmente 0, se calcula después
+
+ensamblar_rip_header(sr_rip_packet_t* rip_hdr, uint8_t command, uint8_t version) {
+    rip_hdr->command = command;
+    rip_hdr->version = version;
+    rip_hdr->zero = 0;
+}
