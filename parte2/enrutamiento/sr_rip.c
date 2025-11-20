@@ -352,99 +352,140 @@ void sr_handle_rip_packet(struct sr_instance* sr,
 }
 
 void sr_rip_send_response(struct sr_instance* sr, struct sr_if* interface, uint32_t ipDst) {
-    /* Reservar buffer para paquete completo con cabecera Ethernet */
-    int bufflen = sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) +sizeof(sr_udp_hdr_t) + sizeof(sr_rip_packet_t) + (sizeof(sr_rip_entry_t) * MAX_RIP_ENTRIES);
+    /* Tamaños exactos de las estructuras */
+    const int RIP_HEADER_SIZE = 4;
+    const int RIP_ENTRY_SIZE = 20;
+    
+    int eth_size = sizeof(sr_ethernet_hdr_t);
+    int ip_size = sizeof(sr_ip_hdr_t);
+    int udp_size = sizeof(sr_udp_hdr_t);
+    
+    /* Reservar buffer para paquete completo */
+    int max_rip_payload = RIP_HEADER_SIZE + (RIP_ENTRY_SIZE * MAX_RIP_ENTRIES);
+    int bufflen = eth_size + ip_size + udp_size + max_rip_payload;
     uint8_t* buff = malloc(bufflen);
+    memset(buff, 0, bufflen);
    
+    /* Punteros a las cabeceras */
+    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*)(buff + eth_size);
+    sr_udp_hdr_t* udp_hdr = (sr_udp_hdr_t*)(buff + eth_size + ip_size);
+    uint8_t* rip_start = buff + eth_size + ip_size + udp_size;
+    
+    /* Construir header RIP */
+    rip_start[0] = RIP_COMMAND_RESPONSE;
+    rip_start[1] = RIP_VERSION;
+    rip_start[2] = 0;
+    rip_start[3] = 0;
+    
+    /* Recorrer la tabla de enrutamiento y llenar entradas */
+    struct sr_rt* rt_iter = sr->routing_table;
+    int entry_count = 0;
+    uint8_t* entry_ptr = rip_start + RIP_HEADER_SIZE;
+    
+    while (rt_iter != NULL && entry_count < MAX_RIP_ENTRIES) {
+        /* Determinar métrica según split horizon y validez */
+        uint32_t metric;
+        
+#if SPLIT_HORIZON_ENABLED
+        if (strcmp(rt_iter->interface, interface->name) == 0 || rt_iter->valid == 0) { 
+            // Split horizon con poisoned reverse
+            metric = RIP_INFINITY;
+        } else {
+            metric = (rt_iter->metric < RIP_INFINITY) ? rt_iter->metric : RIP_INFINITY;
+        }
+#else
+        // Split horizon deshabilitado
+        if (rt_iter->valid == 0) {
+            metric = RIP_INFINITY;
+        } else {
+            metric = (rt_iter->metric < RIP_INFINITY) ? rt_iter->metric : RIP_INFINITY;
+        }
+        Debug("RIP: Split horizon DESACTIVADO - métrica real para ");
+        print_addr_ip_int(ntohl(rt_iter->dest.s_addr));
+        Debug("\n");
+#endif 
+        
+        /* Escribir entrada RIP (20 bytes) */
+        uint16_t family = htons(2);  // IPv4
+        memcpy(entry_ptr + 0, &family, 2);
+        
+        uint16_t tag = rt_iter->route_tag;
+        memcpy(entry_ptr + 2, &tag, 2);
+        
+        memcpy(entry_ptr + 4, &rt_iter->dest.s_addr, 4);   // ip
+        memcpy(entry_ptr + 8, &rt_iter->mask.s_addr, 4);   // mask
+        
+        uint32_t next_hop = 0;
+        memcpy(entry_ptr + 12, &next_hop, 4);              // next_hop = 0.0.0.0
+        
+        uint32_t metric_net = htonl(metric);
+        memcpy(entry_ptr + 16, &metric_net, 4);            // metric
+        
+        entry_ptr += RIP_ENTRY_SIZE;
+        entry_count++;
+        rt_iter = rt_iter->next;
+    }
+    
+    /* Calcular longitudes finales */
+    int rip_payload_size = RIP_HEADER_SIZE + (entry_count * RIP_ENTRY_SIZE);
+    uint16_t udp_len = udp_size + rip_payload_size;
+    uint16_t ip_len = ip_size + udp_len;
+    int total_len = eth_size + ip_len;
+    /* Determinar si es multicast (anuncio) o unicast (respuesta a request) */
+    int is_multicast = (ipDst == htonl(RIP_IP));
 
-    /* Construir cabecera Ethernet */
-    ensamblar_eth_header((sr_ethernet_hdr_t*)buff, interface->addr, rip_multicast_mac, ethertype_ip);
+    /* Resolver MAC destino: multicast -> rip_multicast_mac; unicast -> lookup ARP cache */
+    uint8_t dest_mac[ETHER_ADDR_LEN];
+    struct sr_arpentry *arp_entry = NULL;
+    if (is_multicast) {
+        memcpy(dest_mac, rip_multicast_mac, ETHER_ADDR_LEN);
+    } else {
+        /* Buscar en la cache ARP */
+        arp_entry = sr_arpcache_lookup(&sr->cache, ipDst);
+        if (!arp_entry) {
+            /* No hay entrada ARP: ensamblar cabecera Ethernet con destino cero y encolar el paquete
+               para que el arpcache lo reenvíe cuando obtenga la MAC. Luego enviar ARP request. */
+            uint8_t zero_mac[ETHER_ADDR_LEN] = {0};
+            memcpy(dest_mac, zero_mac, ETHER_ADDR_LEN);
+            sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*)buff;
+            ensamblar_eth_header(eth_hdr, interface->addr, dest_mac, ethertype_ip);
+
+            /* Encolar paquete completo (incluye Ethernet header) y pedir ARP */
+            sr_arpcache_queuereq(&sr->cache, ipDst, buff, total_len, interface->name);
+            sr_arp_request_send(sr, ipDst, interface->name);
+            free(buff);
+            return;
+        } else {
+            memcpy(dest_mac, arp_entry->mac, ETHER_ADDR_LEN);
+            free(arp_entry);
+        }
+    }
+
+    sr_ethernet_hdr_t* eth_hdr = (sr_ethernet_hdr_t*)buff;
+    ensamblar_eth_header(eth_hdr, interface->addr, dest_mac, ethertype_ip);
+
+    Debug("RIP: Sending %s response with %d entries via %s\n", 
+          is_multicast ? "MULTICAST" : "UNICAST",
+          entry_count, interface->name);
+    Debug("     rip_payload=%d, udp_len=%u, ip_len=%u, total=%d\n", 
+          rip_payload_size, udp_len, ip_len, total_len);
     
     /* Construir cabecera IP */
-    sr_ip_hdr_t* ip_hdr = (sr_ip_hdr_t*)(buff + sizeof(sr_ethernet_hdr_t));
-    ensamblar_ip_header(ip_hdr, interface->ip, ipDst, 0 /* luego se actualiza */, ip_protocol_udp, 1);
-        /* RIP usa TTL=1 */
+    ensamblar_ip_header(ip_hdr, interface->ip, ipDst, ip_len, ip_protocol_udp, 1);
     
     /* Construir cabecera UDP */
-    sr_udp_hdr_t* udp_hdr = (sr_udp_hdr_t*)(buff + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t));
-    ensamblar_udp_header(udp_hdr, RIP_PORT, RIP_PORT, 0 /* luego se actualiza */);
+    ensamblar_udp_header(udp_hdr, RIP_PORT, RIP_PORT, udp_len);
     
-    /* Construir paquete RIP con las entradas de la tabla */
-        /* Armar encabezado RIP de la respuesta */
-        sr_rip_packet_t* rip_hdr = (sr_rip_packet_t*)(buff + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) + sizeof(sr_udp_hdr_t));
-        ensamblar_rip_header(rip_hdr, RIP_COMMAND_RESPONSE, RIP_VERSION);
-
-        /* Recorrer toda la tabla de enrutamiento  */
-        struct sr_rt* rt_iter = sr->routing_table;
-        int entry_count = 0;
-
-        while (rt_iter != NULL && entry_count < MAX_RIP_ENTRIES) {
-        /* Llenar cada entrada con la información de la tabla de enrutamiento */
-          sr_rip_entry_t* rip_entry = (sr_rip_entry_t*)(buff + sizeof(sr_ethernet_hdr_t) + sizeof(sr_ip_hdr_t) +sizeof(sr_udp_hdr_t) + sizeof(sr_rip_packet_t) + (entry_count * sizeof(sr_rip_entry_t)));
-          rip_entry->family_identifier = htons(2);  // IPv4
-          rip_entry->route_tag = 0;
-          rip_entry->ip = rt_iter->dest.s_addr;
-          rip_entry->mask = rt_iter->mask.s_addr;
-          rip_entry->next_hop = 0; // Siempre 0.0.0.0
-            
-
-#if SPLIT_HORIZON_ENABLED
-          if (rt_iter->learned_from == ipDst || rt_iter->valid == 0) {
-                // Split horizon con reversinha envenenadinha
-                rip_entry->metric = htonl(RIP_INFINITY);
-                Debug("RIP: Split horizon - tirando pocion de envenenamiento *sonidos de bruja* ");
-                print_addr_ip_int(ntohl(rt_iter->dest.s_addr));
-                Debug(" for destination ");
-                print_addr_ip_int(ntohl(ipDst));
-                Debug("\n");
-            } else  {
-                uint32_t metric = (rt_iter->metric < RIP_INFINITY) ? rt_iter->metric : RIP_INFINITY;
-                rip_entry->metric = htonl(metric);
-            }
-#else
-            // Split horizon deshabilitado - enviar métrica real siempre
-            if (rt_iter->valid == 0) {
-                rip_entry->metric = htonl(RIP_INFINITY);
-            } else {
-                uint32_t metric = (rt_iter->metric < RIP_INFINITY) ? rt_iter->metric : RIP_INFINITY;
-                rip_entry->metric = htonl(metric);
-            }
-            Debug("RIP: Split horizon DESACTIVADO- enviando métrica real para ");
-            print_addr_ip_int(ntohl(rt_iter->dest.s_addr));
-            Debug("\n");
-#endif
-
-            rt_iter = rt_iter->next;
-            entry_count++;
-        }
-
-        /* Considerar split horizon con poisoned reverse y rutas expiradas por timeout cuando corresponda */
-        /* Normalizar métrica a rango RIP (1..INFINITY) */
-
-        /* Armar la entrada RIP:
-           - family=2 (IPv4)
-           - route_tag desde la ruta
-           - ip/mask toman los valores de la tabla
-           - next_hop: siempre 0.0.0.0 */
-
-    /* Calcular longitudes del paquete */
-    int total_len = bufflen-(MAX_RIP_ENTRIES - entry_count)*sizeof(sr_rip_entry_t);
-    /* Actualizar longitudes en IP y UDP */
-    uint16_t ip_len = total_len - sizeof(sr_ethernet_hdr_t);
-    uint16_t udp_len = sizeof(sr_udp_hdr_t) + sizeof(sr_rip_packet_t) + (entry_count * sizeof(sr_rip_entry_t));
-    ip_hdr->ip_len = htons(ip_len);
-    udp_hdr->length = htons(udp_len);
-
     /* Calcular checksums */
     ip_hdr->ip_sum = 0;
-    ip_hdr->ip_sum = ip_cksum(ip_hdr, sizeof(sr_ip_hdr_t));
-
+    ip_hdr->ip_sum = ip_cksum(ip_hdr, ip_size);
+    
     udp_hdr->checksum = 0;
-    udp_hdr->checksum = udp_cksum(ip_hdr, udp_hdr, (uint8_t*)rip_hdr);
-
+    udp_hdr->checksum = udp_cksum(ip_hdr, udp_hdr, rip_start);
+    
     /* Enviar paquete */
     sr_send_packet(sr, buff, total_len, interface->name);
-
+    
     free(buff);
 }
 
